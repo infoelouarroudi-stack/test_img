@@ -6,7 +6,6 @@
 
 ## 📑 Table des matières
 
-- [0) Contexte, objectif et livrables](#0-contexte-objectif-et-livrables)
 - [1) Structure du dépôt (projet principal)](#1-structure-du-dépôt-projet-principal)
 - [2) Environnements (venv + conda)](#2-environnements-venv--conda)
   - [Option A — venv (pip)](#option-a--venv-pip)
@@ -29,11 +28,9 @@
   - [6.2 Entraîner VanillaNN (26D ou stickman)](#62-entraîner-vanillaNN-26d-ou-stickman)
   - [6.3 Entraîner GAN](#63-entraîner-gan)
 - [7) Vidéo de démonstration](#7-vidéo-de-démonstration)
-- [8) Dépannage (problèmes courants)](#8-dépannage-problèmes-courants)
-- [9) Bonus — Application web Flask](#9-bonus--application-web-flask-exécution-uniquement)
-  - [9.1 Rôle (ce qu'elle ajoute)](#91-rôle-ce-quelle-ajoute)
-  - [9.2 Installation & exécution (venv)](#92-installation--exécution-venv)
-- [10) Crédits](#10-crédits)
+- [8) Bonus — Application web Flask](#9-bonus--application-web-flask-exécution-uniquement)
+  - [8.1 Rôle (ce qu'elle ajoute)](#91-rôle-ce-quelle-ajoute)
+  - [8.2 Installation & exécution (venv)](#92-installation--exécution-venv)
 
 ---
 
@@ -269,15 +266,6 @@ La vidéo montre :
 
 ---
 
-## 8) Dépannage (problèmes courants)
-
-- `ModuleNotFoundError` : assurez-vous que `PYTHONPATH=src` est défini lors de l'exécution depuis la racine du dépôt.
-- Poids manquants : assurez-vous que les fichiers `.pth` existent dans `data/Dance/` et sont inclus dans le ZIP de soumission.
-- Squelette non détecté : la démo affichera des panneaux d'erreur ; essayez une vidéo source plus claire ou ajustez les conditions de recadrage/éclairage.
-- Démo lente : augmentez le saut d'images (par défaut traite déjà 1 image sur 5).
-
----
-
 ## 9) Bonus — Application web Flask (exécution uniquement)
 
 Dépôt GitHub : https://github.com/infoelouarroudi-stack/DemoDaanceWEB
@@ -312,7 +300,3 @@ python app.py
 Puis ouvrez (serveur de développement Flask par défaut) : http://localhost:5000/
 
 ---
-
-## 10) Crédits
-
-Ce TP est inspiré de l'idée de synthèse guidée par posture "Everybody Dance Now" (Chan et al., ICCV 2019) et utilise MediaPipe Pose pour l'extraction de squelette dans le pipeline fourni.
