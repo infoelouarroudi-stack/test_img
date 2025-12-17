@@ -1,338 +1,318 @@
-# DeepAnimDance — Posture-guided Image Synthesis
+# DeepAnimDance — Posture‑Guided Person Image Synthesis (TP "Everybody Dance Now")
 
-**Project: Everybody Dance Now - Mini Implementation**
-
----
-
-## 1. Context & Objectives
-
-This project implements **posture-guided image synthesis**: transferring motion (pose sequences) from a **source video** to a **target person** learned from a target video dataset.
-
-- **Pose extraction**: Using **MediaPipe** (provided in starter code)
-- **Generation strategies**: Multiple approaches from baseline to GAN-based synthesis
-- **Goal**: Synthesize realistic target frames driven by source poses
-
-### Submission Requirements
-- **ZIP file** containing:
-  - All source code
-  - Data files
-  - Trained network weights (`.pth` files)
-  - ~2 minute demo video
-- **No separate report**: All explanations must be in this `README.md` (English or French accepted)
+*(README au format rapport comme requis : pas de rapport PDF séparé)*
 
 ---
 
-## 2. Repository Structure
+## 📑 Table des matières
 
-```
-project-root/
-├── src/                          # All Python source files
-│   ├── DanceDemo.py              # Main demo application
-│   ├── VideoSkeleton.py          # Skeleton extraction & dataset
-│   ├── GenNeirest.py             # Nearest neighbor baseline
-│   ├── GenVanillaNN.py           # Vanilla neural network generator
-│   ├── GenGAN.py                 # GAN-based generator
-│   ├── VideoReader.py            # Video utilities
-│   └── Vec3.py                   # Helper classes
-│
-├── data/                         # Videos, cache, and trained models
-│   ├── Dance/                    # Trained model weights
-│   │   ├── DanceGenGAN.pth
-│   │   ├── DanceGenVanillaFromSke26.pth
-│   │   └── DanceGenVanillaFromSkeim.pth
-│   ├── taichi1.mp4               # Target dataset video
-│   ├── taichi1.pkl               # Precomputed skeleton cache
-│   ├── taichi1/                  # Extracted frames directory
-│   ├── taichi2.mp4               # Source video example
-│   └── karate1.mp4               # Additional source video
-│
-├── requirements.txt              # Python dependencies (pip)
-├── environment.yml               # Conda environment file
-└── README.md                     # This file
-```
+- [0) Contexte, objectif et livrables](#0-contexte-objectif-et-livrables)
+- [1) Structure du dépôt (projet principal)](#1-structure-du-dépôt-projet-principal)
+- [2) Environnements (venv + conda)](#2-environnements-venv--conda)
+  - [Option A — venv (pip)](#option-a--venv-pip)
+  - [Option B — conda (environment.yml)](#option-b--conda-environmentyml)
+- [3) Exécuter la démo (projet principal)](#3-exécuter-la-démo-projet-principal)
+  - [3.1 Important : exécuter depuis la racine du dépôt + PYTHONPATH](#31-important--exécuter-depuis-la-racine-du-dépôt--pythonpath)
+  - [3.2 Ce que la démo affiche](#32-ce-que-la-démo-affiche)
+  - [3.3 Choisir le générateur (GEN_TYPE)](#33-choisir-le-générateur-gen_type)
+- [4) Aperçu du pipeline (données → squelette → génération)](#4-aperçu-du-pipeline-données--squelette--génération)
+  - [4.1 Construction et mise en cache de l'ensemble de données cible (VideoSkeleton)](#41-construction-et-mise-en-cache-de-lensemble-de-données-cible-videoskeleton)
+  - [4.2 Extraction de squelette (MediaPipe Pose) et représentation](#42-extraction-de-squelette-mediapipe-pose-et-représentation)
+  - [4.3 Recadrage et cas d'échec (robustesse de la démo)](#43-recadrage-et-cas-déchec-robustesse-de-la-démo)
+- [5) Méthodes et concepts (étapes TP)](#5-méthodes-et-concepts-étapes-tp)
+  - [5.1 Étape 1 — Baseline Nearest Neighbor (GenNeirest)](#51-étape-1--baseline-nearest-neighbor-genneirest)
+  - [5.2 Étape 2 — Vanilla NN (vecteur 26D → image)](#52-étape-2--vanilla-nn-vecteur-26d--image--gennnske26toimage)
+  - [5.3 Étape 3 — Vanilla NN (image stickman → image)](#53-étape-3--vanilla-nn-image-stickman--image--gennnskeimltoimage)
+  - [5.4 Étape 4 — Raffinement GAN](#54-étape-4--raffinement-gan--gengan-wgangp--l1)
+- [6) Entraînement (reproductibilité)](#6-entraînement-reproductibilité)
+  - [6.1 Optionnel : reconstruire le cache](#61-optionnel--reconstruire-le-cache)
+  - [6.2 Entraîner VanillaNN (26D ou stickman)](#62-entraîner-vanillaNN-26d-ou-stickman)
+  - [6.3 Entraîner GAN](#63-entraîner-gan)
+- [7) Vidéo de démonstration](#7-vidéo-de-démonstration)
+- [8) Dépannage (problèmes courants)](#8-dépannage-problèmes-courants)
+- [9) Bonus — Application web Flask](#9-bonus--application-web-flask-exécution-uniquement)
+  - [9.1 Rôle (ce qu'elle ajoute)](#91-rôle-ce-quelle-ajoute)
+  - [9.2 Installation & exécution (venv)](#92-installation--exécution-venv)
+- [10) Crédits](#10-crédits)
 
 ---
 
-## 3. Installation
+## 0) Contexte, objectif et livrables
 
-### Option A: Virtual Environment (pip)
+Ce projet implémente la **synthèse d'image guidée par posture** : transférer le mouvement (séquence de poses) d'une **vidéo source** vers une **identité cible** apprise à partir d'un ensemble de données vidéo cible.
+
+Le pipeline est : **Vidéo → Extraction de squelette (MediaPipe Pose) → Générateur → Images cibles synthétisées**.
+
+**Exigences de soumission (TP) :**
+- Un ZIP incluant **tout le code + données + poids entraînés (.pth)** et une **vidéo de démonstration d'environ 2 minutes** montrant le code en cours d'exécution.
+- Pas de rapport séparé : tous les détails doivent être inclus dans ce `README.md`.
+
+---
+
+## 1) Structure du dépôt (projet principal)
+
+Structure typique (racine) :
+- `src/` : code source (démo, construction de l'ensemble de données, classe squelette, générateurs).
+- `data/` : vidéos + cache + poids entraînés.
+  - `data/taichi1.mp4` : vidéo **cible** utilisée pour construire l'ensemble de données.
+  - `data/taichi1.pkl` + `data/taichi1/` : squelettes/images en cache produits par `VideoSkeleton`.
+  - `data/Dance/` : réseaux entraînés (`.pth`) chargés par les générateurs.
+
+---
+
+## 2) Environnements (venv + conda)
+
+Deux configurations ont été utilisées selon les membres de l'équipe :
+- Un membre a utilisé `venv` (pip).
+- Un autre membre a utilisé `conda` via `environment.yml`.
+
+### Option A — venv (pip)
 
 ```bash
-# Create virtual environment
 python -m venv venv
 
-# Activate (Windows)
+# Windows
 venv\Scripts\activate
 
-# Activate (Linux/macOS)
+# Linux/Mac
 source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Option B: Conda Environment
+### Option B — conda (environment.yml)
 
 ```bash
-# Create environment from file
 conda env create -f environment.yml
-
-# Activate environment
 conda activate <ENV_NAME>
 ```
 
-### Required Packages
-- `numpy`
-- `opencv-python`
-- `torch`
-- `torchvision`
-- `mediapipe`
-- `Pillow`
-- `tensorboardX`
-
 ---
 
-## 4. Running the Demo
+## 3) Exécuter la démo (projet principal)
 
-The main program `src/DanceDemo.py` displays **three panels**:
-- **SOURCE VIDEO** | **SKELETON** | **GENERATION**
-- FPS counter in real-time
+### 3.1 Important : exécuter depuis la racine du dépôt + PYTHONPATH
 
-**Keyboard controls:**
-- `q` — Quit the demo
-- `n` — Skip ~100 frames forward
+Les chemins vers les poids sont codés en dur comme des chemins relatifs comme `data/Dance/...`, et les imports sont écrits comme `from VideoSkeleton import ...`, donc exécutez depuis la racine du dépôt avec `src/` dans `PYTHONPATH`.
 
-### 4.1 Running from Repository Root
+**Linux / macOS**
 
-⚠️ **Important**: Always run commands from the repository root directory, as the code uses relative paths like `data/Dance/...`
-
-Since imports are written as `from VideoSkeleton import ...`, you must add `src/` to `PYTHONPATH`.
-
-#### Linux / macOS
 ```bash
 PYTHONPATH=src python src/DanceDemo.py
 ```
 
-#### Windows (PowerShell)
+**Windows (PowerShell)**
+
 ```powershell
 $env:PYTHONPATH="src"
 python src\DanceDemo.py
 ```
 
-### 4.2 Selecting Generation Method
+### 3.2 Ce que la démo affiche
 
-In `src/DanceDemo.py`, set the `GEN_TYPE` variable to choose the generator:
+`DanceDemo.py` affiche 3 panneaux : **VIDÉO SOURCE | SQUELETTE | GÉNÉRATION**, et un overlay FPS.
 
-| `GEN_TYPE` | Method | Description |
-|------------|--------|-------------|
-| `1` | Nearest Neighbor | Baseline (`GenNeirest`) |
-| `2` | Vanilla NN (26D) | 26D skeleton vector → image |
-| `3` | Vanilla NN (Image) | Stickman image → image |
-| `4` | GAN | WGAN-GP + L1 loss |
+Contrôles : `q` quitte, `n` saute ~100 images.
 
-### 4.3 Changing Source Video
+### 3.3 Choisir le générateur (GEN_TYPE)
 
-The demo reads poses from the source video (default: `data/taichi2.mp4`) and applies them to the target dataset (built from `data/taichi1.mp4`).
+Dans `DanceDemo.py`, sélectionnez le générateur avec `GEN_TYPE` (et une vidéo source comme `data/taichi2.mp4`).
 
-To change the source video, edit the last lines of `DanceDemo.py`:
-```python
-DanceDemo("data/karate1.mp4", GEN_TYPE)  # Example: use karate video
-```
+| GEN_TYPE | Méthode | Description |
+|---:|---|---|
+| 1 | Nearest Neighbor | Baseline `GenNeirest` (pas d'apprentissage). |
+| 2 | Vanilla NN (26D) | Vecteur de squelette réduit (26D) → image. |
+| 3 | Vanilla NN (stickman) | Image stickman → image (encodeur‑décodeur + skips). |
+| 4 | GAN | WGAN‑GP + L1 (stickman → image). |
 
 ---
 
-## 5. Pipeline Overview
+## 4) Aperçu du pipeline (données → squelette → génération)
 
-### 5.1 Pose Extraction & Caching (`VideoSkeleton`)
+### 4.1 Construction et mise en cache de l'ensemble de données cible (VideoSkeleton)
 
-`VideoSkeleton` builds a dataset of (skeleton, image) pairs from the **target video**.
+`VideoSkeleton` construit un ensemble de données cible de paires (squelette, image) à partir de la vidéo cible.
 
-**Caching mechanism:**
-- Saves skeleton data to `.pkl` file
-- Stores extracted frames to disk
-- Subsequent runs load precomputed data (unless `forceCompute=True`)
+Pour accélérer les exécutions répétées, il utilise la mise en cache : il stocke les squelettes et les métadonnées dans un `.pkl` et stocke les images extraites sur le disque ; les exécutions suivantes rechargent les données en cache si disponibles.
 
-### 5.2 Demo Visualization (`DanceDemo`)
+### 4.2 Extraction de squelette (MediaPipe Pose) et représentation
 
-For each source frame:
-1. **Crop** using target crop logic
-2. **Draw** skeleton visualization panel
-3. **Generate** target frame via `generator.generate(ske)`
+Les squelettes sont extraits avec MediaPipe Pose (33 points de repère avec x, y, z).
 
-**Performance notes:**
-- Processes 1 frame out of 5 by default (configurable)
-- Use `_ensure_uint8_bgr` helper to standardize generator outputs
+Pour l'apprentissage, un **squelette réduit** est utilisé : 13 articulations avec des coordonnées (x, y) → 26 valeurs (entrée de dimension inférieure, apprentissage plus facile).
 
----
+### 4.3 Recadrage et cas d'échec (robustesse de la démo)
 
-## 6. Methods Implemented
+Pour chaque image source, la démo utilise la logique de recadrage de l'ensemble de données cible (`cropAndSke`) pour recadrer autour de la pose détectée avant de dessiner/générer.
 
-Progressive implementation following the assignment stages: baseline → direct NN → stickman NN → GAN improvement.
+Si aucun squelette n'est détecté, la démo affiche un panneau d'erreur rouge et saute la génération pour cette image.
 
-### 6.1 Method 1: Nearest Neighbor (Baseline)
-
-**Class**: `GenNeirest`
-
-**Approach**: Searches the target dataset for the closest skeleton using joint distance metrics and returns the corresponding target image.
-
-**Pros:**
-- Always returns real images from dataset
-- No training required
-
-**Cons:**
-- Slow search for large datasets
-- No temporal continuity
-- Poor generalization to unseen poses
+Pour maintenir une vitesse en temps réel, la démo calcule une image sur 5 par défaut (modifiable).
 
 ---
 
-### 6.2 Method 2: Vanilla NN (26D Skeleton → Image)
+## 5) Méthodes et concepts (étapes TP)
 
-**Class**: `GenVanillaNN` (with `optSkeOrImage=1`)
+Ce projet suit une approche progressive : baseline → apprentissage supervisé → image‑à‑image → raffinement GAN pour le réalisme.
 
-**Approach**: 
-- Input: Reduced skeleton representation (13 joints × 2D = 26 values)
-- Output: 64×64 RGB image
-- Direct mapping learned by neural network
+### 5.1 Étape 1 — Baseline Nearest Neighbor (GenNeirest)
 
-**Dataset**: Outputs `(skeleton_tensor, target_image_tensor)` with proper normalization.
+**Concept :** pour chaque pose source, trouver la pose la plus proche dans l'ensemble de données cible et sortir l'image cible réelle correspondante (pas de synthèse).
+
+**Implémentation (votre code) :**
+- Itérer sur les squelettes cibles, calculer `ske.distance(target_ske)` et sélectionner le minimum.
+- Retourner l'image cible correspondante convertie en float dans [0,1] pour compatibilité d'affichage.
+
+**Limitations attendues :** mouvement saccadé (pas de modèle temporel), limité aux poses existant dans l'ensemble de données cible, et recherche linéaire lente pour les grands ensembles de données.
+
+### 5.2 Étape 2 — Vanilla NN (vecteur 26D → image) — `GenNNSke26ToImage`
+
+**Concept :** apprendre une correspondance directe d'un vecteur de pose de 26 dimensions vers une image RGB cible 64×64.
+
+**Architecture (votre code final) :**
+- `Linear(26 → 256*4*4)` puis reshape en un tenseur 4×4×256.
+- Suréchantillonnage avec des blocs `ConvTranspose2d` pour atteindre 64×64.
+- Stabilisation/qualité : `BatchNorm2d`, `LeakyReLU`, et plusieurs `ResidualBlock`s.
+- Sortie : `Tanh()` → valeurs dans [-1,1] (alignées avec la normalisation cible).
+
+**Entraînement :** `GenVanillaNN.train()` utilise Adam et `MSELoss` (régression pixel par pixel), qui est simple mais conduit souvent au flou (effet de moyenne).
+
+### 5.3 Étape 3 — Vanilla NN (image stickman → image) — `GenNNSkeImToImage`
+
+**Concept :** convertir le squelette en une "image stickman" intermédiaire et résoudre la traduction image-à-image.
+
+**Création du stickman :** `SkeToImageTransform(64)` crée une image noire, dessine le squelette (dessin BGR coloré), puis convertit en RGB avant `ToTensor()`.
+
+**Architecture (votre code final) :**
+- Encodeur : 4 couches de sous-échantillonnage `Conv2d` (64×64 → 4×4) pour extraire les caractéristiques de pose.
+- Module ajouté : `SelfAttention(256)` au niveau de caractéristiques 8×8×256 pour capturer les dépendances à longue portée.
+- Goulot d'étranglement : blocs résiduels empilés (`ResidualBlock(512)` répétés).
+- Décodeur : suréchantillonnage `ConvTranspose2d` pour reconstruire 64×64.
+- Connexions résiduelles : concaténations explicites `torch.cat([...])` (style U‑Net).
+- Sortie : `Tanh()` dans [-1,1].
+
+**Entraînement :** toujours supervisé avec `MSELoss`, donc la pose est respectée mais les textures peuvent rester lisses.
+
+### 5.4 Étape 4 — Raffinement GAN — `GenGAN` (WGAN‑GP + L1)
+
+**Motivation :** les pertes de pixels supervisées (en particulier MSE) produisent souvent des images floues ; l'entraînement GAN encourage des textures plus nettes et des sorties plus réalistes.
+
+**Discriminateur/Critique :** CNN de style PatchGAN produisant une carte de patchs, sans sigmoïde (score du critique WGAN).
+
+**Pertes implémentées (votre code) :**
+- Critique (WGAN‑GP) : D(fake).mean - D(real).mean + λ_gp*GP avec pénalité de gradient calculée sur des échantillons interpolés.
+- Générateur : terme adversarial -D(fake).mean + terme de reconstruction `lambda_l1 * L1(fake, real)` avec `lambda_l1 = 100`.
+
+**Détails de la boucle d'entraînement (votre code) :**
+- `n_critic = 5` mises à jour du critique par mise à jour du générateur.
+- Adam avec `betas=(0.0, 0.9)`, `lr_g=1e-4`, `lr_d=4e-4`.
+- Point de contrôle enregistré comme `{"netG": state_dict, "netD": state_dict}` dans `data/Dance/DanceGenGAN.pth`.
 
 ---
 
-### 6.3 Method 3: Vanilla NN (Stickman Image → Image)
+## 6) Entraînement (reproductibilité)
 
-**Class**: `GenVanillaNN` (with `optSkeOrImage=2`)
+L'entraînement utilise l'ensemble de données cible construit à partir de `data/taichi1.mp4`.
 
-**Approach**:
-- Skeleton rendered as "stickman" image using `SkeToImageTransform`
-- CNN learns: stickman image → target image
-- Intermediate representation closer to paper's approach
+### 6.1 Optionnel : reconstruire le cache
 
-**Benefits**: Generally improves learning compared to raw coordinates.
+Si nécessaire, supprimez le cache et le répertoire d'images puis réexécutez l'entraînement/démo pour que `VideoSkeleton` les recalcule :
 
----
-
-### 6.4 Method 4: GAN (WGAN-GP + L1)
-
-**Class**: `GenGAN`
-
-**Architecture**:
-- Generator: Stickman input → target image
-- Discriminator: PatchGAN-like critic
-- Training: WGAN-GP (Gradient Penalty) for stability
-
-**Training features:**
-- Multiple discriminator steps (`ncritic`) per generator step
-- **L1 reconstruction loss** (weighted) to preserve structure
-- Gradient penalty for Wasserstein distance enforcement
-
-**Inference**: Skeleton → stickman → generator → denormalized output image
-
----
-
-## 7. Training the Networks
-
-All training uses the target dataset built from `data/taichi1.mp4`.
-
-### 7.1 (Optional) Rebuild Skeleton Cache
-
-If needed, delete cache files:
 ```bash
-rm data/taichi1.pkl
+rm -f data/taichi1.pkl
 rm -rf data/taichi1/
 ```
 
-Next run will rebuild the cache automatically (or set `forceCompute=True` in `VideoSkeleton`).
+(Les utilisateurs Windows peuvent supprimer manuellement depuis l'Explorateur de fichiers.)
 
----
+### 6.2 Entraîner VanillaNN (26D ou stickman)
 
-### 7.2 Train Vanilla NN
+Dans `GenVanillaNN.py`, configurez :
+- `optSkeOrImage = 1` pour vecteur(26D)→image
+- `optSkeOrImage = 2` pour stickman→image
 
-Open `src/GenVanillaNN.py` and enable training mode in the `__main__` section (set `train=True` and configure `nepoch`).
+et activez l'entraînement dans la section `__main__`.
 
-**Linux/macOS:**
+Exécutez :
+
 ```bash
 PYTHONPATH=src python src/GenVanillaNN.py data/taichi1.mp4
 ```
 
-**Windows (PowerShell):**
-```powershell
-$env:PYTHONPATH="src"
-python src\GenVanillaNN.py data\taichi1.mp4
-```
+Poids enregistrés (selon le mode) :
+- `data/Dance/DanceGenVanillaFromSke26.pth`
+- `data/Dance/DanceGenVanillaFromSkeim.pth`
 
-**Output weights:**
-- `data/Dance/DanceGenVanillaFromSke26.pth` (26D skeleton input)
-- `data/Dance/DanceGenVanillaFromSkeim.pth` (stickman image input)
+### 6.3 Entraîner GAN
 
----
+Dans `GenGAN.py`, définissez `train = True` et exécutez :
 
-### 7.3 Train GAN
-
-**Linux/macOS:**
 ```bash
 PYTHONPATH=src python src/GenGAN.py data/taichi1.mp4
 ```
 
-**Windows (PowerShell):**
-```powershell
-$env:PYTHONPATH="src"
-python src\GenGAN.py data\taichi1.mp4
+Sortie :
+- `data/Dance/DanceGenGAN.pth`
+
+---
+
+## 7) Vidéo de démonstration
+
+Une vidéo de démonstration d'environ 2 minutes est fournie dans ce dépôt :
+
+- `demo.mp4` (ou lien) : <PUT_LINK_HERE>
+
+La vidéo montre :
+- L'exécution de `src/DanceDemo.py` depuis la racine du dépôt avec les réseaux entraînés.
+- Le passage entre au moins deux modes (par exemple, `GEN_TYPE=1` baseline et `GEN_TYPE=4` GAN).
+- Les 3 panneaux (SOURCE | SQUELETTE | GÉNÉRATION), l'affichage FPS, et la sortie avec `q`.
+
+---
+
+## 8) Dépannage (problèmes courants)
+
+- `ModuleNotFoundError` : assurez-vous que `PYTHONPATH=src` est défini lors de l'exécution depuis la racine du dépôt.
+- Poids manquants : assurez-vous que les fichiers `.pth` existent dans `data/Dance/` et sont inclus dans le ZIP de soumission.
+- Squelette non détecté : la démo affichera des panneaux d'erreur ; essayez une vidéo source plus claire ou ajustez les conditions de recadrage/éclairage.
+- Démo lente : augmentez le saut d'images (par défaut traite déjà 1 image sur 5).
+
+---
+
+## 9) Bonus — Application web Flask (exécution uniquement)
+
+Dépôt GitHub : https://github.com/infoelouarroudi-stack/DemoDaanceWEB
+
+### 9.1 Rôle (ce qu'elle ajoute)
+
+Une petite interface Flask a été ajoutée en **bonus** pour exécuter/visualiser le projet depuis un navigateur (wrapper UI), tout en gardant le projet principal comme cœur noté.
+
+Structure :
+- `app.py` : point d'entrée du serveur Flask.
+- `templates/index.html` : page d'accueil.
+- `templates/viewer.html` : page de visualisation des résultats.
+- `static/` : CSS/JS/assets.
+
+### 9.2 Installation & exécution (venv)
+
+Depuis la racine du dépôt de l'application web (où se trouvent `app.py` et `requirements.txt`) :
+
+```bash
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+source venv/bin/activate
+
+pip install -r requirements.txt
+python app.py
 ```
 
-**Training configuration:**
-- Default: 50 epochs (configurable in main)
-- Output: `data/Dance/DanceGenGAN.pth`
+Puis ouvrez (serveur de développement Flask par défaut) : http://localhost:5000/
 
 ---
 
-## 8. Demo Video Requirements
+## 10) Crédits
 
-Record a **~2 minute video** showing:
-
-1. Running `DanceDemo.py` from repository root
-2. Switching between `GEN_TYPE` values (demonstrate at least one NN method + GAN)
-3. Real-time window display:
-   - Three panels: `SOURCE | SKELETON | GENERATION`
-   - FPS counter
-   - Keyboard controls (`q` to quit, `n` to skip)
-
----
-
-## 9. Credits & Notes
-
-**Based on:**
-- Paper: "Everybody Dance Now" (Chan et al., ICCV 2019)
-- TP assignment with MediaPipe integration for skeleton extraction
-
-**Author**: `<YOUR NAME>`  
-**Date**: `<DATE>`
-
----
-
-## 10. Troubleshooting
-
-### Common Issues
-
-**Issue**: `ModuleNotFoundError` when running scripts
-- **Solution**: Ensure `PYTHONPATH=src` is set when running from repository root
-
-**Issue**: Models not loading
-- **Solution**: Verify `.pth` files exist in `data/Dance/` directory
-
-**Issue**: Slow performance
-- **Solution**: Reduce frame processing rate in `DanceDemo.py` (default: 1 out of 5 frames)
-
-**Issue**: Cache rebuild needed
-- **Solution**: Delete `.pkl` file and frames directory, then rerun
-
----
-
-## 11. Future Improvements
-
-Potential enhancements:
-- Temporal consistency between frames
-- Higher resolution output (beyond 64×64)
-- Multi-person pose transfer
-- Better discriminator architecture
-- Perceptual loss integration
+Ce TP est inspiré de l'idée de synthèse guidée par posture "Everybody Dance Now" (Chan et al., ICCV 2019) et utilise MediaPipe Pose pour l'extraction de squelette dans le pipeline fourni.
