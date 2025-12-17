@@ -33,19 +33,6 @@
   - [8.2 Installation & exécution (venv)](#92-installation--exécution-venv)
 
 ---
-
-## 0) Contexte, objectif et livrables
-
-Ce projet implémente la **synthèse d'image guidée par posture** : transférer le mouvement (séquence de poses) d'une **vidéo source** vers une **identité cible** apprise à partir d'un ensemble de données vidéo cible.
-
-Le pipeline est : **Vidéo → Extraction de squelette (MediaPipe Pose) → Générateur → Images cibles synthétisées**.
-
-**Exigences de soumission (TP) :**
-- Un ZIP incluant **tout le code + données + poids entraînés (.pth)** et une **vidéo de démonstration d'environ 2 minutes** montrant le code en cours d'exécution.
-- Pas de rapport séparé : tous les détails doivent être inclus dans ce `README.md`.
-
----
-
 ## 1) Structure du dépôt (projet principal)
 
 Structure typique (racine) :
