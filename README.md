@@ -1,7 +1,5 @@
 # DeepAnimDance — Posture‑Guided Person Image Synthesis (TP "Everybody Dance Now")
 
-*(README au format rapport comme requis : pas de rapport PDF séparé)*
-
 ---
 
 ## 📑 Table des matières
